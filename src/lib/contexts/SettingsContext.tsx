@@ -53,7 +53,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch data using useSWR based on sheetUrl
   const { data: fetchedData, error: dataError, isLoading: isDataLoading, mutate: refreshData } = useSWR<TabData>(
-    settings.sheetUrl ? settings.sheetUrl : null,
+    settings.sheetUrl && settings.sheetUrl !== DEFAULT_SHEET_URL ? settings.sheetUrl : null,
     fetchAllTabsData,
     {
       revalidateOnFocus: false,
