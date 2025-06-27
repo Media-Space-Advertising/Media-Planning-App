@@ -2,10 +2,12 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
-import type { Campaign, Settings, TabData } from '../types'
+import Papa from 'papaparse';
+import type { Campaign, Settings as SettingsType, TabData, Site } from '../types'
 import { DEFAULT_SHEET_URL } from '../config'
 import { fetchAllTabsData, getCampaigns } from '../sheetsData'
 
+export type Settings = SettingsType & { dataSource: 'api' | 'csv' }
 export type SettingsContextType = {
   settings: Settings
   updateSettings: (newSettings: Partial<Settings>) => void
@@ -17,19 +19,25 @@ export type SettingsContextType = {
   isDataLoading: boolean
   refreshData: () => void
   campaigns: Campaign[]
+  siteData: Site[] | null
+  loadSitesFromFile: (file: File) => Promise<void>
+  dataSource: 'api' | 'csv'
+  setDataSource: (source: 'api' | 'csv') => void
 }
 
 const defaultSettings: Settings = {
   sheetUrl: DEFAULT_SHEET_URL,
   currency: '$',
   selectedCampaign: undefined,
-  activeTab: 'daily'
+  activeTab: 'daily',
+  dataSource: 'api',
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined)
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(defaultSettings)
+  const [siteData, setSiteData] = useState<Site[] | null>(null);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -43,13 +51,30 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setSettings(defaultSettings)
       }
     }
+    const savedSites = localStorage.getItem('siteData');
+    if (savedSites) {
+      try {
+        setSiteData(JSON.parse(savedSites));
+      } catch {
+        setSiteData(null);
+      }
+    }
   }, [])
 
   // Save settings to localStorage
   useEffect(() => {
     const { campaigns, ...settingsToSave } = settings as any // Exclude campaigns if present
     localStorage.setItem('settings', JSON.stringify(settingsToSave))
-  }, [settings])
+    if (siteData) {
+      localStorage.setItem('siteData', JSON.stringify(siteData));
+    } else {
+      localStorage.removeItem('siteData');
+    }
+  }, [settings, siteData])
+
+  const setDataSource = (source: 'api' | 'csv') => {
+    setSettings(prev => ({ ...prev, dataSource: source }));
+  }
 
   // Fetch data using useSWR based on sheetUrl
   const { data: fetchedData, error: dataError, isLoading: isDataLoading, mutate: refreshData } = useSWR<TabData>(
@@ -82,6 +107,42 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings(prev => ({ ...prev, ...newSettings }))
   }
 
+  const loadSitesFromFile = (file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          try {
+            const mappedSites: Site[] = results.data.map((row: any) => {
+              if (!row.frameId || !row.panelName || !row.formatName || !row.lat || !row.lng || !row.cost) {
+                throw new Error(`CSV is missing required headers. Found: ${Object.keys(row).join(', ')}`);
+              }
+              return {
+                id: row.frameId,
+                name: row.panelName,
+                format: row.formatName,
+                lat: parseFloat(row.lat),
+                lng: parseFloat(row.lng),
+                cost: parseFloat(row.cost),
+              }
+            });
+            setSiteData(mappedSites);
+            // Clear the sheet URL so the app prioritizes file data
+            setSheetUrl('');
+            setDataSource('csv');
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        },
+        error: (err: any) => {
+          reject(err);
+        }
+      });
+    });
+  }
+
   return (
     <SettingsContext.Provider value={{
       settings,
@@ -93,7 +154,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       dataError,
       isDataLoading,
       refreshData: () => refreshData(),
-      campaigns
+      campaigns,
+      siteData,
+      loadSitesFromFile,
+      dataSource: settings.dataSource,
+      setDataSource,
     }}>
       {children}
     </SettingsContext.Provider>

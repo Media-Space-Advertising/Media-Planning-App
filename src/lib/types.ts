@@ -90,4 +90,20 @@ export type TabData = {
 }
 
 // Helper type to get numeric values from metrics
-export type MetricValue<T> = T extends number ? T : never 
+export type MetricValue<T> = T extends number ? T : never
+
+// OOH Site types
+export interface Site {
+  id: string;
+  name: string;
+  format: string;
+  lat: number;
+  lng: number;
+  cost: number;
+}
+
+export interface PostcodeTarget {
+  postcode: string;
+  lat: number;
+  lng: number;
+} 

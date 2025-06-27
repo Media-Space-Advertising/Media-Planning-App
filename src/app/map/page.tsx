@@ -1,6 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import dynamic from 'next/dynamic';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Settings, Pencil } from 'lucide-react';
+import { useSettings } from '@/lib/contexts/SettingsContext';
+import type { Site, PostcodeTarget } from '@/lib/types';
 
 const OOHMap = dynamic(() => import('@/components/OOHMap'), {
   ssr: false,
@@ -9,13 +13,7 @@ const OOHMap = dynamic(() => import('@/components/OOHMap'), {
 
 const radiusMin = 0;
 const radiusMax = 2000;
-const radiusStep = 250;
-
-interface PostcodeTarget {
-  postcode: string;
-  lat: number;
-  lng: number;
-}
+const radiusStep = 50;
 
 interface TargetArea {
     id: string;
@@ -33,15 +31,6 @@ interface Scenario {
 interface CampaignSite extends Site {
   targetAreaId: string | null;
   targetAreaName: string;
-}
-
-interface Site {
-  id: string;
-  name: string;
-  format: string;
-  lat: number;
-  lng: number;
-  cost: number;
 }
 
 function isWithinRadius(site: Site, targets: PostcodeTarget[], radius: number) {
@@ -105,6 +94,7 @@ export default function MapPage() {
   const [multiSelectedSites, setMultiSelectedSites] = useState<Site[]>([]);
   const [isBudgetMode, setIsBudgetMode] = useState(false);
 
+  const { settings, siteData, dataSource } = useSettings();
   const activeScenario = scenarios.find(s => s.id === activeScenarioId);
   const campaignSites = activeScenario?.sites ?? [];
 
@@ -112,20 +102,34 @@ export default function MapPage() {
   const remainingBudget = (activeScenario?.budget ?? null) !== null ? (activeScenario?.budget ?? 0) - totalCost : null;
   const isOverBudget = remainingBudget !== null && remainingBudget < 0;
 
-  useEffect(() => {
-    const fetchSites = async () => {
-      const googleSheetUrl = "https://script.google.com/macros/s/AKfycbxVCTXUBFRyYJjQlBJL_l0JcuF8VypY1EEKwDWH7RPrGtbAVfGeFmXBm7fydAtNK86C/exec";
+  const [editingTargetAreaId, setEditingTargetAreaId] = useState<string | null>(null);
+  const [editingTargetAreaName, setEditingTargetAreaName] = useState('');
+  const [editingScenarioId, setEditingScenarioId] = useState<string | null>(null);
+  const [editingScenarioName, setEditingScenarioName] = useState('');
 
+  useEffect(() => {
+    const processSites = (sitesToProcess: Site[]) => {
+      setSites(sitesToProcess);
+      const uniqueFormats = [...new Set(sitesToProcess.map(site => site.format))].sort();
+      setAvailableFormats(uniqueFormats);
+      setSelectedFormats(uniqueFormats);
+      setSitesLoading(false);
+      setError("");
+    }
+
+    const fetchSitesFromUrl = async () => {
+      if (!settings.sheetUrl) {
+        setError("App Script URL is not set. Please set it in the settings page.");
+        setSitesLoading(false);
+        return;
+      }
       try {
         setSitesLoading(true);
-        const res = await fetch(googleSheetUrl);
+        const res = await fetch(settings.sheetUrl);
         const data = await res.json();
-        
         if (data.error) {
           throw new Error(data.error);
         }
-
-        // Map the data from the sheet to the 'Site' interface used by the map
         const mappedSites: Site[] = data.map((site: any) => ({
           id: site.frameId,
           name: site.panelName,
@@ -134,24 +138,23 @@ export default function MapPage() {
           lng: site.lng,
           cost: site.cost
         }));
-
-        setSites(mappedSites);
-
-        // Dynamically create the list of available formats from the data
-        const uniqueFormats = [...new Set(mappedSites.map(site => site.format))].sort();
-        setAvailableFormats(uniqueFormats);
-        // By default, all formats are selected, so all sites are shown initially.
-        setSelectedFormats(uniqueFormats);
-
+        processSites(mappedSites);
       } catch (e: any) {
         console.error("Failed to fetch site data:", e);
         setError(`Failed to load site data. ${e.message}`);
+        setSitesLoading(false);
       }
-      setSitesLoading(false);
     };
 
-    fetchSites();
-  }, []);
+    if (dataSource === 'csv' && siteData && siteData.length > 0) {
+      processSites(siteData);
+    } else if (dataSource === 'api' || !dataSource) {
+      fetchSitesFromUrl();
+    } else {
+      setSites([]);
+      setSitesLoading(false);
+    }
+  }, [settings.sheetUrl, siteData, dataSource]);
 
   const updateScenarios = (updater: (prevScenarios: Scenario[]) => Scenario[]) => {
     setScenarios(prevScenarios => {
@@ -407,6 +410,28 @@ export default function MapPage() {
     backdropFilter: 'blur(2px)'
   };
 
+  const handleEditTargetArea = (area: TargetArea) => {
+    setEditingTargetAreaId(area.id);
+    setEditingTargetAreaName(area.name);
+  };
+
+  const handleSaveTargetAreaName = (areaId: string) => {
+    setTargetAreas(prev => prev.map(area => area.id === areaId ? { ...area, name: editingTargetAreaName.trim() || area.name } : area));
+    setEditingTargetAreaId(null);
+    setEditingTargetAreaName('');
+  };
+
+  const handleEditScenario = (scenario: Scenario) => {
+    setEditingScenarioId(scenario.id);
+    setEditingScenarioName(scenario.name);
+  };
+
+  const handleSaveScenarioName = (scenarioId: string) => {
+    updateScenarios(prev => prev.map(s => s.id === scenarioId ? { ...s, name: editingScenarioName.trim() || s.name } : s));
+    setEditingScenarioId(null);
+    setEditingScenarioName('');
+  };
+
   return (
     <div style={{position: 'relative', height: '100vh', paddingTop: '4rem', boxSizing: 'border-box', background: "#f7f7f9", overflow: 'hidden'}}>
 
@@ -501,10 +526,10 @@ export default function MapPage() {
                     step={radiusStep}
                     value={radius}
                     onChange={(e) => setRadius(Number(e.target.value))}
-                    style={{ width: "100%" }}
+                    style={{ width: "100%", height: '32px', cursor: targetsForMap.length === 0 ? 'not-allowed' : 'pointer', accentColor: '#0070f3' }}
                     disabled={targetsForMap.length === 0}
                   />
-                  <div style={{ textAlign: "center", marginTop: 4 }}>{radius} m</div>
+                  <div style={{ textAlign: "center", marginTop: 4, fontWeight: 600, fontSize: 16 }}>{radius} m</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: '30vh', overflowY: 'auto', borderTop: '1px solid #ddd', paddingTop: '12px', marginTop: '12px' }}>
                   {availableFormats.map((format) => (
@@ -557,8 +582,27 @@ export default function MapPage() {
                 {targetAreas.map(area => (
                   <div key={area.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: '12px', background: activeTargetAreaId === area.id ? '#f0f8ff' : '#f9f9f9' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{area.name}</h3>
-      <div>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
+                        {editingTargetAreaId === area.id ? (
+                          <input
+                            type="text"
+                            value={editingTargetAreaName}
+                            autoFocus
+                            onChange={e => setEditingTargetAreaName(e.target.value)}
+                            onBlur={() => handleSaveTargetAreaName(area.id)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveTargetAreaName(area.id); }}
+                            style={{ fontSize: '1rem', fontWeight: 600, margin: 0, border: '1px solid #ccc', borderRadius: 4, padding: '2px 6px', minWidth: 0 }}
+                          />
+                        ) : (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {area.name}
+                            <button onClick={() => handleEditTargetArea(area)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 4 }} title="Edit name">
+                              <Pencil size={14} />
+                            </button>
+                          </span>
+                        )}
+                      </h3>
+                      <div>
                         <button onClick={() => setActiveTargetAreaId(area.id)} style={{ marginRight: 4, padding: '2px 8px', fontSize: 13, cursor: 'pointer', border: '1px solid #0070f3', background: activeTargetAreaId === area.id ? '#0070f3' : '#fff', color: activeTargetAreaId === area.id ? '#fff' : '#0070f3', borderRadius: 4 }}>View</button>
                         <button onClick={() => handleRemoveTargetArea(area.id)} style={{ padding: '2px 6px', fontSize: 13, cursor: 'pointer', border: '1px solid #c00', background: 'none', color: '#c00', borderRadius: 4 }}>X</button>
                       </div>
@@ -675,7 +719,26 @@ export default function MapPage() {
                   return (
                     <div key={scenario.id} style={{ border: '1px solid #ddd', borderRadius: 8, background: activeScenarioId === scenario.id ? '#f0f8ff' : '#fff' }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: '12px' }} onClick={() => toggleSection(scenario.id)}>
-                        <div style={{ fontWeight: 600, flex: 1 }}>{scenario.name}</div>
+                        <div style={{ fontWeight: 600, flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {editingScenarioId === scenario.id ? (
+                            <input
+                              type="text"
+                              value={editingScenarioName}
+                              autoFocus
+                              onChange={e => setEditingScenarioName(e.target.value)}
+                              onBlur={() => handleSaveScenarioName(scenario.id)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleSaveScenarioName(scenario.id); }}
+                              style={{ fontSize: '1rem', fontWeight: 600, border: '1px solid #ccc', borderRadius: 4, padding: '2px 6px', minWidth: 0 }}
+                            />
+                          ) : (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {scenario.name}
+                              <button onClick={() => handleEditScenario(scenario)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 4 }} title="Edit name">
+                                <Pencil size={14} />
+                              </button>
+                            </span>
+                          )}
+                        </div>
                         <span style={{ fontSize: "1.2rem", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
                       </div>
                       {isOpen && (

@@ -131,7 +131,10 @@ export function MetricsChart({
           ? d3.axisBottom(xScale as d3.ScaleBand<string>)
             .tickValues(getTickValues().map(d => format(d, 'MMM d')))
           : d3.axisBottom(xScale as d3.ScaleTime<number, number>)
-            .tickFormat(d => format(d as Date, 'MMM d'))
+            .tickFormat(d => {
+              const date = new Date(d as Date | string);
+              return isNaN(date.getTime()) ? '' : format(date, 'MMM d');
+            })
             .tickValues(getTickValues())
       )
       .call(g => g.select('.domain').attr('stroke', '#cbd5e1'))

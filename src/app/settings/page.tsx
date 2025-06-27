@@ -10,16 +10,20 @@ import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { fetchAllTabsData, getCampaigns } from '@/lib/sheetsData'
 import { CURRENCY_OPTIONS } from '@/lib/utils'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 
+const CSV_TEMPLATE = `frameId,panelName,formatName,lat,lng,cost\n123,Site A,48 sheet,51.4545,-2.5879,100\n124,Site B,6 sheet,51.4550,-2.5890,80\n`;
+
 export default function SettingsPage() {
   const router = useRouter()
-  const { settings, setSheetUrl, setCurrency, refreshData, isDataLoading: isContextLoading, dataError: contextError } = useSettings()
+  const { settings, setSheetUrl, setCurrency, refreshData, isDataLoading: isContextLoading, dataError: contextError, loadSitesFromFile, siteData, updateSettings } = useSettings()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>()
+  const [dataSource, setDataSource] = useState(siteData ? 'csv' : 'api');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (contextError) {
@@ -27,13 +31,21 @@ export default function SettingsPage() {
     }
   }, [contextError]);
 
+  // Handle data source switch
+  useEffect(() => {
+    if (dataSource === 'api') {
+      // Clear uploaded site data and restore sheet URL
+      localStorage.removeItem('siteData');
+    }
+    // If switching to CSV, do nothing (user will upload)
+  }, [dataSource]);
+
   const handleUpdate = async () => {
     setIsLoading(true)
     setError(undefined)
-
     try {
       await refreshData()
-      router.push('/')
+      router.push('/map')
     } catch (err) {
       console.error('Error updating data:', err)
       setError('Failed to update data. Please check your Sheet URL or network connection.')
@@ -41,6 +53,34 @@ export default function SettingsPage() {
       setIsLoading(false)
     }
   }
+
+  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsLoading(true);
+    setError(undefined);
+    try {
+      await loadSitesFromFile(file);
+      setDataSource('csv');
+      setError(undefined);
+      window.location.reload(); // reload to re-trigger data fetch
+    } catch (err: any) {
+      setError(err.message || 'Failed to load CSV.');
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'site-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -52,19 +92,68 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="sheetUrl" className="text-base">
-                    Google Sheet URL
-                  </Label>
-                  <div className="mt-2">
-                    <Input
-                      id="sheetUrl"
-                      value={settings.sheetUrl}
-                      onChange={(e) => setSheetUrl(e.target.value)}
-                      placeholder="Enter your Google Sheet URL"
-                      className="h-12"
-                    />
+                  <Label className="text-base">Data Source</Label>
+                  <div className="flex gap-6 mt-2">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="dataSource"
+                        value="api"
+                        checked={dataSource === 'api'}
+                        onChange={() => setDataSource('api')}
+                      />
+                      <span>API / Google Sheet</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="dataSource"
+                        value="csv"
+                        checked={dataSource === 'csv'}
+                        onChange={() => setDataSource('csv')}
+                      />
+                      <span>CSV Upload</span>
+                    </label>
                   </div>
                 </div>
+
+                {dataSource === 'api' && (
+                  <div>
+                    <Label htmlFor="sheetUrl" className="text-base">
+                      Google Sheet URL
+                    </Label>
+                    <div className="mt-2">
+                      <Input
+                        id="sheetUrl"
+                        value={settings.sheetUrl}
+                        onChange={(e) => setSheetUrl(e.target.value)}
+                        placeholder="Enter your Google Sheet URL"
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {dataSource === 'csv' && (
+                  <div className="space-y-2">
+                    <Label className="text-base">Upload Site List (CSV)</Label>
+                    <div className="flex gap-4 items-center mt-2">
+                      <Input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleCSVUpload}
+                        ref={fileInputRef}
+                        className="h-12 w-full"
+                      />
+                      <Button type="button" onClick={handleDownloadTemplate} className="h-12 whitespace-nowrap">
+                        Download Template
+                      </Button>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Required headers: <code>frameId, panelName, formatName, lat, lng, cost</code>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <Label className="text-base">Currency</Label>
@@ -94,7 +183,7 @@ export default function SettingsPage() {
               <div className="pt-4">
                 <Button
                   onClick={handleUpdate}
-                  disabled={isLoading || isContextLoading || !settings.sheetUrl}
+                  disabled={isLoading || isContextLoading || (dataSource === 'api' && !settings.sheetUrl)}
                   className="w-full h-12 text-lg bg-[#ea580c] hover:bg-[#c2410c] text-white"
                 >
                   {isLoading || isContextLoading ? (
