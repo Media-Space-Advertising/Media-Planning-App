@@ -19,6 +19,9 @@ export function Navigation() {
                             <Image src="/logo.png" alt="Media Space Logo" width={120} height={36} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
                             <span className="font-bold text-white text-lg" style={{ lineHeight: 1, marginLeft: '40px' }}>OOH Scenario Planner</span>
                         </Link>
+                        <Link href="/media-schedule" className="flex items-center" style={{ textDecoration: 'none', marginLeft: '32px' }}>
+                            <span className="font-bold text-white text-lg" style={{ lineHeight: 1 }}>Media Schedule</span>
+                        </Link>
                     </div>
                     <div style={{ marginLeft: 'auto' }}>
                         <Link

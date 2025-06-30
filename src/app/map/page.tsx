@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, Pencil } from 'lucide-react';
 import { useSettings } from '@/lib/contexts/SettingsContext';
 import type { Site, PostcodeTarget } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 const OOHMap = dynamic(() => import('@/components/OOHMap'), {
   ssr: false,
@@ -107,6 +108,8 @@ export default function MapPage() {
   const [editingScenarioId, setEditingScenarioId] = useState<string | null>(null);
   const [editingScenarioName, setEditingScenarioName] = useState('');
 
+  const router = useRouter();
+
   useEffect(() => {
     const processSites = (sitesToProcess: Site[]) => {
       setSites(sitesToProcess);
@@ -155,6 +158,23 @@ export default function MapPage() {
       setSitesLoading(false);
     }
   }, [settings.sheetUrl, siteData, dataSource]);
+
+  // On mount, restore scenarios, activeScenarioId, and history from localStorage
+  useEffect(() => {
+    const storedScenarios = localStorage.getItem('scenarios');
+    const storedActiveScenarioId = localStorage.getItem('activeScenarioId');
+    const storedScenariosHistory = localStorage.getItem('scenariosHistory');
+    if (storedScenarios) setScenarios(JSON.parse(storedScenarios));
+    if (storedActiveScenarioId) setActiveScenarioId(storedActiveScenarioId);
+    if (storedScenariosHistory) setScenariosHistory(JSON.parse(storedScenariosHistory));
+  }, []);
+
+  // Persist scenarios, activeScenarioId, and history to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('scenarios', JSON.stringify(scenarios));
+    localStorage.setItem('activeScenarioId', activeScenarioId);
+    localStorage.setItem('scenariosHistory', JSON.stringify(scenariosHistory));
+  }, [scenarios, activeScenarioId, scenariosHistory]);
 
   const updateScenarios = (updater: (prevScenarios: Scenario[]) => Scenario[]) => {
     setScenarios(prevScenarios => {
@@ -430,6 +450,13 @@ export default function MapPage() {
     updateScenarios(prev => prev.map(s => s.id === scenarioId ? { ...s, name: editingScenarioName.trim() || s.name } : s));
     setEditingScenarioId(null);
     setEditingScenarioName('');
+  };
+
+  const handleExportToMediaSchedule = () => {
+    if (!activeScenario) return;
+    // Store the scenario in localStorage for retrieval on the Media Schedule page
+    localStorage.setItem('exportedScenario', JSON.stringify(activeScenario));
+    router.push('/media-schedule');
   };
 
   return (
@@ -858,6 +885,29 @@ export default function MapPage() {
                                   {isOverBudget ? '-' : ''}£{Math.abs(remainingBudget).toLocaleString()}
                                 </span>
                               </p>
+                            )}
+                            {/* Export to Media Schedule button - small and at the bottom */}
+                            {activeScenarioId === scenario.id && (
+                              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                                <button
+                                  type="button"
+                                  onClick={handleExportToMediaSchedule}
+                                  style={{
+                                    padding: '4px 10px',
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    border: '1px solid #0070f3',
+                                    background: '#0070f3',
+                                    color: '#fff',
+                                    borderRadius: 4,
+                                    fontWeight: 600,
+                                    flex: 1,
+                                    minWidth: 0
+                                  }}
+                                >
+                                  Export
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
