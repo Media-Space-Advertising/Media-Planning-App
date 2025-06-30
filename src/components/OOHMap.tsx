@@ -27,6 +27,9 @@ interface Site {
   lat: number;
   lng: number;
   cost: number;
+  mediaOwner?: string;
+  frameId?: string;
+  postcode?: string;
 }
 
 interface OOHMapProps {
@@ -158,9 +161,12 @@ export default function OOHMap({
           >
             <Popup>
               <strong>{site.name}</strong><br />
+              {site.postcode && <>{site.postcode}<br /></>}
               Format: {site.format}<br />
-              Cost: £{site.cost}
-              <br /><br />
+              {site.mediaOwner && <>Owner: {site.mediaOwner}<br /></>}
+              Cost: £{site.cost.toLocaleString()}<br />
+              {site.frameId && <>Frame ID: {site.frameId}<br /></>}
+              <br />
               <button
                 onClick={() => onSiteSelect(site)}
                 disabled={isSiteInCampaign(site.id)}

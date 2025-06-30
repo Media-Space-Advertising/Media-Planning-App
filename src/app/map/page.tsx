@@ -64,6 +64,8 @@ export default function MapPage() {
   const [isFormatsExpanded, setIsFormatsExpanded] = useState(true);
   const [isRadiusMode, setIsRadiusMode] = useState(false);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
+  const [availableMediaOwners, setAvailableMediaOwners] = useState<string[]>([]);
+  const [selectedMediaOwners, setSelectedMediaOwners] = useState<string[]>([]);
   
   // Scenarios State
   const [scenarios, setScenarios] = useState<Scenario[]>([{ id: 'initial', name: 'Default Scenario', budget: null, sites: [] }]);
@@ -82,7 +84,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ formats: true, areas: true });
+  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ formats: true, areas: true, mediaOwners: true });
 
   // Sidebar visibility state
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
@@ -116,6 +118,11 @@ export default function MapPage() {
       const uniqueFormats = [...new Set(sitesToProcess.map(site => site.format))].sort();
       setAvailableFormats(uniqueFormats);
       setSelectedFormats(uniqueFormats);
+
+      const uniqueMediaOwners = [...new Set(sitesToProcess.map(site => site.mediaOwner).filter(owner => owner))].sort() as string[];
+      setAvailableMediaOwners(uniqueMediaOwners);
+      setSelectedMediaOwners(uniqueMediaOwners);
+
       setSitesLoading(false);
       setError("");
     }
@@ -139,7 +146,10 @@ export default function MapPage() {
           format: site.formatName,
           lat: site.lat,
           lng: site.lng,
-          cost: site.cost
+          cost: site.cost,
+          mediaOwner: site.mediaOwner,
+          frameId: site.frameId,
+          postcode: site.postcode
         }));
         processSites(mappedSites);
       } catch (e: any) {
@@ -359,6 +369,14 @@ export default function MapPage() {
     );
   };
 
+  const handleMediaOwnerChange = (owner: string) => {
+    setSelectedMediaOwners((prev) =>
+      prev.includes(owner)
+        ? prev.filter((o) => o !== owner)
+        : [...prev, owner]
+    );
+  };
+
   const activeTargetArea = targetAreas.find(area => area.id === activeTargetAreaId);
   const targetsForMap = activeTargetArea?.targets ?? [];
 
@@ -367,6 +385,11 @@ export default function MapPage() {
     // A site must always have its format selected to be shown.
     const formatIsSelected = selectedFormats.includes(site.format);
     if (!formatIsSelected) {
+      return false;
+    }
+
+    // A site must also have its media owner selected, if there are any owners to filter by.
+    if (availableMediaOwners.length > 0 && site.mediaOwner && !selectedMediaOwners.includes(site.mediaOwner)) {
       return false;
     }
 
@@ -393,7 +416,7 @@ export default function MapPage() {
     return acc;
   }, {} as Record<string, CampaignSite[]>);
 
-  const toggleSection = (section: 'formats' | 'areas' | string) => {
+  const toggleSection = (section: 'formats' | 'areas' | 'mediaOwners' | string) => {
     setOpenSections(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -572,6 +595,49 @@ export default function MapPage() {
           ))}
         </div>
       </div>
+            </div>
+          )}
+        </div>
+
+        {/* Accordion Section: Media Owner Selection */}
+        <div style={{ border: '1px solid #ddd', borderRadius: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: '12px' }} onClick={() => toggleSection('mediaOwners')}>
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 600, margin: 0 }}>Media Owner</h2>
+            <span style={{ fontSize: "1.2rem", transform: openSections.mediaOwners ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
+          </div>
+          {openSections.mediaOwners && (
+            <div style={{ padding: '0 12px 12px 12px' }}>
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "14px 12px", background: "#f9f9f9" }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMediaOwners([...availableMediaOwners])}
+                    style={{ padding: '4px 8px', background: '#e0e0e0', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMediaOwners([])}
+                    style={{ padding: '4px 8px', background: '#e0e0e0', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: '30vh', overflowY: 'auto', borderTop: '1px solid #ddd', paddingTop: '12px', marginTop: '12px' }}>
+                  {availableMediaOwners.map((owner) => (
+                    <label key={owner} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 15 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMediaOwners.includes(owner)}
+                        onChange={() => handleMediaOwnerChange(owner)}
+                        style={{ marginRight: 8, width: 16, height: 16 }}
+                      />
+                      <span>{owner}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -862,8 +928,13 @@ export default function MapPage() {
                                       <li key={site.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
                                         <span style={{ flex: 1, marginRight: 8 }}>
                                           <strong>{site.name}</strong><br/>
-                                          <span style={{ color: '#555', fontSize: '13px' }}>{site.format}</span><br/>
+                                          <span style={{ color: '#555', fontSize: '13px' }}>
+                                            {site.postcode ? `${site.postcode} | ` : ''}
+                                            {site.format}
+                                            {site.mediaOwner ? ` | ${site.mediaOwner}` : ''}
+                                          </span><br/>
                                           <span style={{ color: '#555' }}>£{site.cost.toLocaleString()}</span>
+                                          {site.frameId && <><br/><span style={{ color: '#777', fontSize: '12px' }}>Frame ID: {site.frameId}</span></>}
                                         </span>
                                         <button onClick={() => handleRemoveSiteFromCampaign(site.id)} style={{ background: 'none', border: 'none', color: '#c00', fontWeight: 700, cursor: 'pointer', fontSize: 18 }} title="Remove">×</button>
                                       </li>

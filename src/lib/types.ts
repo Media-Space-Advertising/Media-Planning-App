@@ -100,6 +100,9 @@ export interface Site {
   lat: number;
   lng: number;
   cost: number;
+  mediaOwner?: string;
+  frameId?: string;
+  postcode?: string;
 }
 
 export interface PostcodeTarget {
