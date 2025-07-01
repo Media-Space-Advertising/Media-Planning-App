@@ -477,8 +477,24 @@ export default function MapPage() {
 
   const handleExportToMediaSchedule = () => {
     if (!activeScenario) return;
-    // Store the scenario in localStorage for retrieval on the Media Schedule page
-    localStorage.setItem('exportedScenario', JSON.stringify(activeScenario));
+    // Get current schedules from localStorage
+    const stored = localStorage.getItem('mediaSchedules');
+    let schedules = [];
+    if (stored) {
+      try {
+        schedules = JSON.parse(stored);
+      } catch {
+        schedules = [];
+      }
+    }
+    // Create a new unique id for the exported schedule
+    const id = Date.now().toString();
+    const exported = { ...activeScenario, id };
+    // Append and save
+    const updatedSchedules = [...schedules, exported];
+    localStorage.setItem('mediaSchedules', JSON.stringify(updatedSchedules));
+    localStorage.setItem('activeScheduleId', id);
+    // Navigate to media schedule page
     router.push('/media-schedule');
   };
 
