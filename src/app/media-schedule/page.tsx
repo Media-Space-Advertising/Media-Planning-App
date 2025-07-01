@@ -83,6 +83,7 @@ export default function MediaSchedulePage() {
   const [campaignName, setCampaignName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [budgetInput, setBudgetInput] = useState('');
   const [columns, setColumns] = useState(initialColumns);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isScheduleOpen, setIsScheduleOpen] = useState(true);
@@ -119,15 +120,20 @@ export default function MediaSchedulePage() {
       setCampaignName(parsed.campaignName || parsed.name || '');
       setStartDate(parsed.startDate || '');
       setEndDate(parsed.endDate || '');
+      setBudgetInput(parsed.budget !== null && parsed.budget !== undefined ? parsed.budget.toString() : '');
     }
   }, []);
 
   useEffect(() => {
     if (!scenario) return;
-    const updated = { ...scenario, clientName, campaignName, startDate, endDate };
+    const updated = { ...scenario, clientName, campaignName, startDate, endDate, budget: budgetInput ? parseFloat(budgetInput) : null };
     setScenario(updated);
     localStorage.setItem('exportedScenario', JSON.stringify(updated));
-  }, [clientName, campaignName, startDate, endDate]);
+  }, [clientName, campaignName, startDate, endDate, budgetInput]);
+
+  const totalCost = scenario?.sites.reduce((total, site) => total + site.cost, 0) ?? 0;
+  const remainingBudget = scenario?.budget !== null && scenario?.budget !== undefined ? scenario.budget - totalCost : null;
+  const isOverBudget = remainingBudget !== null && remainingBudget < 0;
 
   // Add site to schedule
   const handleAddSite = () => {
@@ -174,43 +180,68 @@ export default function MediaSchedulePage() {
   return (
     <div style={{ background: '#f8f9fa', paddingTop: '8rem', paddingBottom: '4rem', minHeight: '100vh' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 1rem' }}>
-        {/* Campaign Info Section */}
-        <div style={{ background: '#fff', padding: '2rem', borderRadius: 8, boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-end' }}>
-            <div style={{ flex: '1 1 220px', minWidth: 180 }}>
-              <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Client Name</label>
-              <input type="text" value={clientName} onChange={e => setClientName(e.target.value)} style={{ width: '100%', padding: '10px 14px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
-            </div>
-            <div style={{ flex: '1 1 220px', minWidth: 180 }}>
-              <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Campaign Name</label>
-              <input type="text" value={campaignName} onChange={e => setCampaignName(e.target.value)} style={{ width: '100%', padding: '10px 14px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
-            </div>
-            <div style={{ flex: '1 1 180px', minWidth: 140 }}>
-              <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Start Date</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
-            </div>
-            <div style={{ flex: '1 1 180px', minWidth: 140 }}>
-              <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>End Date</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Sites Section */}
+        {/* Media Schedule Card (now includes campaign details, budget, and actions) */}
         <div style={{ background: '#fff', padding: '2rem', borderRadius: 8, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-          <div 
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: '1px solid #dee2e6', paddingBottom: '1rem', marginBottom: '1rem' }}
+          {/* Media Schedule Title */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: '1px solid #dee2e6', paddingBottom: '1rem', marginBottom: '1.5rem' }}
             onClick={() => setIsScheduleOpen(!isScheduleOpen)}
           >
             <div>
               <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0 }}>Media Schedule: {scenario.name}</h1>
-              <p style={{ margin: '4px 0 0', color: '#6c757d', fontSize: '1.1rem' }}>Budget: {scenario.budget !== null ? `£${scenario.budget.toLocaleString()}` : 'No budget set'}</p>
             </div>
             <span style={{ fontSize: "1.5rem", transform: isScheduleOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
           </div>
-          
+
           {isScheduleOpen && (
             <>
+              {/* Campaign Details Section */}
+              <div style={{ marginBottom: '2rem' }}>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '1rem', color: '#2d3a4a' }}>Campaign Details</h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+                    <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Client Name</label>
+                    <input type="text" value={clientName} onChange={e => setClientName(e.target.value)} style={{ width: '100%', padding: '10px 14px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
+                  </div>
+                  <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+                    <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Campaign Name</label>
+                    <input type="text" value={campaignName} onChange={e => setCampaignName(e.target.value)} style={{ width: '100%', padding: '10px 14px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
+                  </div>
+                  <div style={{ flex: '1 1 180px', minWidth: 140 }}>
+                    <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Start Date</label>
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
+                  </div>
+                  <div style={{ flex: '1 1 180px', minWidth: 140 }}>
+                    <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>End Date</label>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Budget & Schedule Summary Card (now inside accordion) */}
+              <div style={{ background: '#f6fafd', border: '1px solid #e3e8ee', borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.03)', padding: '1.5rem 2rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
+                <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+                  <label style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, display: 'block', color: '#495057' }}>Budget</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={budgetInput}
+                    onChange={e => setBudgetInput(e.target.value)}
+                    placeholder="Set budget (£)"
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #ced4da', borderRadius: 4, fontSize: '1rem', background: '#fff' }}
+                  />
+                </div>
+                <div style={{ flex: '2 1 400px', minWidth: 200, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 16 }}>Schedule Total: £{totalCost.toLocaleString()}</span>
+                  {scenario.budget !== null && remainingBudget !== null && (
+                    <span style={{ fontWeight: 600, fontSize: 16, color: isOverBudget ? '#dc3545' : '#28a745' }}>
+                      {isOverBudget ? 'Over Budget: ' : 'Remaining: '}
+                      {isOverBudget ? '-' : ''}£{Math.abs(remainingBudget).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Sites Section */}
               <div style={{ margin: '16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <select value={selectedSiteId} onChange={e => setSelectedSiteId(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ccc', borderRadius: 4, minWidth: 200, fontSize: '1rem' }}>
@@ -239,7 +270,6 @@ export default function MediaSchedulePage() {
                   Clear All
                 </button>
               </div>
-              
               {scenario.sites.length === 0 ? (
                 <p style={{ textAlign: 'center', color: '#6c757d', padding: '2rem 0' }}>No sites have been added to this scenario.</p>
               ) : (
